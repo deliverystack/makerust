@@ -1,6 +1,9 @@
 # makerust.bash: The Ultimate (WSL) Rust Compilation and Deployment Script 
 
+![Example Output](full.png)
+
 Depending on command line options and user interaction, makerust.bash can do the following, in this order:
+
 -	Update Rust toolchains, components, and rustup.
 -	Update dependencies in Cargo.lock to the latest versions
 -	Remove files from the target directory to clean build artifacts and dependencies.
