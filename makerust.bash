@@ -1,88 +1,104 @@
 #!/usr/bin/bash
 
-# Script Summary:
+# SCRIPT SUMMARY
 # This script automates building, testing, and deploying Rust projects.
-# It supports building binaries for both Linux and Windows, as well as generating documentation.
 # Features include:
-#   - User prompts with a default "yes" behavior.
-#   - Running commands multiple times for timing output when the `-t` flag is provided.
+#   - Building binaries for Linux and Windows platforms.
+#   - Generating documentation for the project.
 #   - Support for debug and release build modes.
-#   - Force mode to skip all prompts.
-#   - Verbose and debug modes for increased output clarity.
-#   - Automatic detection of binary names from Cargo.toml.
-#   - Output colorization for informational, warning, and error messages.
+#   - A "force mode" to skip user prompts.
+#   - Verbose and debug modes for detailed logging.
+#   - Optional command execution timing.
+#   - Detection of binary names from Cargo.toml.
+#   - Informative, warning, and error messages with colorized output.
 
-# Default values
-project_dir="$(pwd)" # The Rust project directory (default: current directory)
-winbld=""            # Output directory for Windows builds
-linbld=""            # Output directory for Linux builds
-doc_dir=""           # Output directory for documentation
-build_mode="release" # Build mode, either "release" or "debug" (default: release)
-verbose=0            # Verbose mode toggle
-debug=0              # Debug mode toggle
-use_time=0           # Time mode toggle
-rust_backtrace="full" # Default Rust backtrace level
-force=0              # Force mode toggle
-script_name=$(basename "$0") # The script name for use in messages
+# DEFAULT CONFIGURATION VARIABLES
+project_dir="$(pwd)" # Default project directory is the current directory
+winbld=""            # Windows build output directory (user-defined)
+linbld=""            # Linux build output directory (user-defined)
+doc_dir=""           # Documentation output directory (user-defined)
+build_mode="release" # Build mode: "release" (default) or "debug"
+verbose=0            # Verbose mode toggle (0: off, 1: on)
+debug=0              # Debug mode toggle (0: off, 1: on)
+use_time=0           # Time command execution toggle (0: off, 1: on)
+rust_backtrace="full" # Default Rust backtrace level for debugging
+force=0              # Force mode toggle (0: off, 1: on)
+script_name=$(basename "$0") # The name of this script for message context
 
-# Colors using tput for better output readability
-green=$(tput setaf 2)
-yellow=$(tput setaf 3)
-red=$(tput setaf 1)
-cyan=$(tput setaf 6)
-orange=$(tput setaf 3)
-reset=$(tput sgr0)
+# OUTPUT COLOR CONFIGURATION (for user-friendly messaging)
+green=$(tput setaf 2)   # Green for success or informational variable values
+yellow=$(tput setaf 3)  # Yellow for warnings
+red=$(tput setaf 1)     # Red for errors
+cyan=$(tput setaf 6)    # Cyan for informational messages
+orange=$(tput setaf 3)  # Orange for progress updates
+reset=$(tput sgr0)      # Reset to default terminal text style
 
-# Informational message
+# FUNCTION: Display informational messages (e.g., status updates)
+# Arguments: $1 - Message string
 info() {
     [[ "$verbose" -eq 1 || "$debug" -eq 1 ]] && printf "${cyan}${script_name}${reset}: %s\n" "$1"
 }
 
+
+# these should check if [[ -n "${FUNCNAME[1]}" or something and write to standard error if so.
+
+display() {
+    printf "${1}${script_name}${reset}: %s\n" "$2"
+}
+
+# FUNCTION: Display progress messages (e.g., ongoing tasks)
+# Arguments: $1 - Message string
 progress() {
-    printf "${orange}${script_name}${reset}: %s\n" "$1"
+    display ${orange} "$1"
 }
 
-# Warning message
+# FUNCTION: Display warning messages (e.g., potential issues)
+# Arguments: $1 - Warning message string
 warn() {
-    printf "${yellow}${script_name}${reset}: %s\n" "$1"
+    display ${yellow} "$1"
 }
 
-# Error message
+# FUNCTION: Display error messages (e.g., command failures)
+# Arguments: $1 - Error message string
 error() {
-    printf "${red}${script_name}${reset}: %s\n" "$1" >&2
+    display ${red} "$1" >&2
 }
 
-# Debug message
+# FUNCTION: Display debug messages (if debug mode is enabled)
+# Arguments: $1 - Debug message string
 debug() {
-    [ "$debug" -eq 1 ] && printf "${blue}${script_name}${reset}: %s\n" "$1"
+    [ "$debug" -eq 1 ] && display ${cyan} "$1"
 }
 
-# Display usage information
+# FUNCTION: Display usage information for the script
+# Purpose: Provide a summary of available options and usage examples.
 usage() {
     echo "Usage: ${script_name} [options]"
     echo "Options:"
     echo "  -v          Enable verbose mode."
-    echo "  -d          Enable debug mode (increased verbosity)."
-    echo "  -t          Use time to measure command execution."
-    echo "  -b <value>  Set RUST_BACKTRACE (default: full). Supported values: full, short, 0, 1."
-    echo "  -p <path>   Specify project directory (default: current directory)."
-    echo "  -w <path>   Specify output directory for Windows executable."
-    echo "  -l <path>   Specify output directory for Linux executable."
-    echo "  -o <path>   Specify output directory for documentation."
-    echo "  -m <mode>   Specify build mode (debug or release, default: release)."
-    echo "  -f          Force mode: skip prompts and proceed unless an error occurs."
-    echo "  -h          Show this help message."
+    echo "  -d          Enable debug mode (more detailed output)."
+    echo "  -t          Enable command execution timing."
+    echo "  -b <value>  Set RUST_BACKTRACE level (default: full)."
+    echo "  -p <path>   Specify the Rust project directory."
+    echo "  -w <path>   Specify the output directory for Windows builds."
+    echo "  -l <path>   Specify the output directory for Linux builds."
+    echo "  -o <path>   Specify the output directory for documentation."
+    echo "  -m <mode>   Specify build mode ('debug' or 'release')."
+    echo "  -f          Enable force mode (skip all prompts)."
+    echo "  -h          Display this help message."
     exit 0
 }
 
-# Function to prompt for deleting the build directory
+# FUNCTION: Prompt the user to delete a build directory
+# Arguments: $1 - Path of the build directory to delete
+# If the directory exists, prompt the user (unless force mode is enabled).
 prompt_delete_build_dir() {
     local build_dir="$1"
     if [ -d "$build_dir" ]; then
         if [ "$force" -eq 1 ]; then
             run "rm -rf \"$build_dir\""
         else
-            echo -n "Do you want to delete the build directory $build_dir? [Y/n] "
+            echo -n "${script_name}: Do you want to delete the build directory $build_dir? [Y/n] "
             read -r delete_dir
             if [[ -z "$delete_dir" || "$delete_dir" =~ ^[Yy]$ ]]; then
                 run "rm -rf \"$build_dir\""
@@ -93,7 +109,31 @@ prompt_delete_build_dir() {
     fi
 }
 
-# Function to get the binary name from Cargo.toml
+prompt_delete_directory() {
+    local dir="$1"
+
+    if [ -d "$dir" ]; then
+        if [ "$force" -ne 1 ]; then
+            echo -e "${warn_prefix} Do you want to delete the directory: ${yellow}${dir}${reset}? [y/N]"
+            read -r delete_dir
+            if [[ "$delete_dir" =~ ^[Yy]$ ]]; then
+                run_command "rm -rf \"$dir\""
+                info "Deleted directory: $dir"
+            else
+                info "Skipped deletion of directory: $dir"
+            fi
+        else
+            run_command "rm -rf \"$dir\""
+            info "Force mode: deleted directory: $dir"
+        fi
+    else
+        debug "Directory not found, skipping deletion: $dir"
+    fi
+}
+
+# FUNCTION: Extract the binary name from the project's Cargo.toml file
+# Arguments: None
+# Returns: Binary name as extracted from Cargo.toml
 get_binary_name() {
     local cargo_toml="$project_dir/Cargo.toml"
     if [ -f "$cargo_toml" ]; then
@@ -104,15 +144,17 @@ get_binary_name() {
     fi
 }
 
-# Function to run commands
+# FUNCTION: Execute a command with optional prompts and error handling
+# Arguments: $1 - Command string to execute
+# If force mode is enabled, the command runs without confirmation.
 run() {
     local cmd="$1"
 
-    # Print and execute command
+    # Show command execution preview
     if [ "$force" -eq 1 ]; then
         info "Force mode enabled: executing without prompt: ${cyan}${cmd}${reset}"
     else
-        echo -e "${prefix} About to execute: ${green}${cmd}${reset}"
+        echo -e "${script_name}: About to execute: ${green}${cmd}${reset}"
         echo -n "Do you want to proceed? [Y/n/a] "
         read -r proceed
         if [[ "$proceed" =~ ^[Aa]$ ]]; then
@@ -126,84 +168,91 @@ run() {
         fi
     fi
 
-    if [ "$debug" -eq 1 ] || [ "$verbose" -eq 1 ]; then
-        eval "$cmd"
-        info "Running again to capture output: ${cyan}${cmd}${reset}"
-    fi
-
+    eval "$cmd"
+    # Execute the command and capture output
+    debug "Running again to capture output: $cmd"
     output=$(eval "$cmd" 2>&1)
     local exit_code=$?
 
-    # Check for errors or warnings in the command output
-    grep_output=$(echo "$output" | grep -Eiq '(^|\s)(error|warning)(\s|$)' && ! echo "$output" | grep -Eq '(^|\s)--')
-
-    # Handle errors
-    if [ $exit_code -ne 0 ] || [ "$grep_output" ]; then
+    # Check for errors or warnings in the output
+    if [ $exit_code -ne 0 ]; then
         error "Command failed: $cmd (exit code: $exit_code)"
-
         if [ "$force" -eq 1 ]; then
             info "Force mode enabled: exiting script due to command error."
             exit 1
-        fi            
-
-        if [ "$force" -ne 1 ]; then
-            echo -n "Do you want to continue to the next command? [Y/n] "
-            read -r continue_next
-            if [[ -z "$continue_next" || "$continue_next" =~ ^[Yy]$ ]]; then
-                warn "Continuing to the next command despite error."
-            else
-                exit 1
-            fi
+        fi
+        echo -n "${script_name}: Do you want to continue to the next command? [Y/n] "
+        read -r continue_next
+        if [[ -z "$continue_next" || "$continue_next" =~ ^[Yy]$ ]]; then
+            warn "Continuing to the next command despite error."
         else
-            warn "Force mode enabled: continuing despite error."
+            exit 1
         fi
     fi
 
-    # Run with `time` if `-t` is specified
+    # Time the command if time mode is enabled
     if [ "$use_time" -eq 1 ]; then
         info "Running command with timing: $cmd"
         eval "time $cmd"
     fi
 }
 
-# Parse command-line arguments
+# PARSE COMMAND-LINE ARGUMENTS
+# Options:
+# -v: Enable verbose mode
+# -d: Enable debug mode
+# -t: Enable timing
+# -b: Set Rust backtrace level
+# -p: Set project directory
+# -w: Set Windows build output directory
+# -l: Set Linux build output directory
+# -o: Set documentation output directory
+# -m: Set build mode (debug or release)
+# -f: Enable force mode
+# -h: Display help
 while getopts ":vdtb:p:w:l:o:m:fh" opt; do
     case $opt in
-        v) verbose=1 ;;             # Enable verbose mode
-        d) debug=1 ;;               # Enable debug mode
-        t) use_time=1 ;;            # Enable time mode
-        b) rust_backtrace=$OPTARG ;; # Set Rust backtrace level
-        p) project_dir=$OPTARG ;;   # Set project directory
-        w) winbld=$OPTARG ;;        # Set Windows build output directory
-        l) linbld=$OPTARG ;;        # Set Linux build output directory
-        o) doc_dir=$OPTARG ;;       # Set documentation output directory
-        m) build_mode=$OPTARG ;;    # Set build mode
-        f) force=1 ;;               # Enable force mode
-        h) usage ;;                 # Show usage information
-        *) usage ;;                 # Show usage on invalid arguments
+        v) verbose=1 ;;
+        d) debug=1 ;;
+        t) use_time=1 ;;
+        b) rust_backtrace=$OPTARG ;;
+        p) project_dir=$OPTARG ;;
+        w) winbld=$OPTARG ;;
+        l) linbld=$OPTARG ;;
+        o) doc_dir=$OPTARG ;;
+        m) build_mode=$OPTARG ;;
+        f) force=1 ;;
+        h) usage ;;
+        *) usage ;;
     esac
 done
 
-# Validate build mode
+# Validate build mode (must be "release" or "debug")
 if [[ "$build_mode" != "release" && "$build_mode" != "debug" ]]; then
     error "Invalid build mode: $build_mode. Must be 'release' or 'debug'."
     exit 1
 fi
 
-export RUST_BACKTRACE=$rust_backtrace
-debug "RUST_BACKTRACE set to ${green}$RUST_BACKTRACE${reset}"
-debug "Project directory set to: ${green}$project_dir${reset}"
-debug "Windows build output directory set to: ${green}$winbld${reset}"
-debug "Linux build output directory set to: ${green}$linbld${reset}"
-debug "Documentation output directory set to: ${green}$doc_dir${reset}"
-debug "Build mode set to: ${green}$build_mode${reset}"
-debug "Verbose mode: ${green}$verbose${reset}"
-debug "Debug mode: ${green}$debug${reset}"
-debug "Time mode: ${green}$use_time${reset}"
-debug "Force mode: ${green}$force${reset}"
+if [[ "$rust_backtrace" != "full" && "$rust_backtrace" != "short" && "$rust_backtrace" != "0" && "$rust_backtrace" != "1" ]]; then
+    error "Invalid RUST_BACKTRACE value: $rust_backtrace. Must be 'full', 'short', '0', or '1'."
+fi
 
+# Export RUST_BACKTRACE level for the script's execution
+export RUST_BACKTRACE=$rust_backtrace
+debug "RUST_BACKTRACE set to ${cyan}$RUST_BACKTRACE${reset}"
+debug "Project directory set to: ${cyan}$project_dir${reset}"
+debug "Windows build output directory set to: ${cyan}$winbld${reset}"
+debug "Linux build output directory set to: ${cyan}$linbld${reset}"
+debug "Documentation output directory set to: ${cyan}$doc_dir${reset}"
+debug "Build mode set to: ${cyan}$build_mode${reset}"
+debug "Verbose mode: ${cyan}$verbose${reset}"
+debug "Debug mode: ${cyan}$debug${reset}"
+debug "Time mode: ${cyan}$use_time${reset}"
+debug "Force mode: ${cyan}$force${reset}"
+
+# DETECT THE PROJECT'S BINARY NAME
 binary_name=$(get_binary_name)
-debug "Detected binary name: $binary_name"
+debug "Binary name detected: ${cyan}${binary_name}${reset}" HW
 
 # Build and deploy binaries
 progress "Update Rust toolchains, components, and rustup."
@@ -223,7 +272,7 @@ if [ -n "$linbld" ]; then
         if [ "$force" -eq 1 ]; then
             run "cp \"$linux_bin\" \"$linbld/\""
         else
-            echo -n "Binary already exists. Do you want to overwrite it? [Y/n/a] "
+            echo -n "${script_name}: Binary already exists. Do you want to overwrite it? [Y/n/a] "
             read -r overwrite
             if [[ "$overwrite" =~ ^[Aa]$ ]]; then
                 info "Aborting script as per user request."
@@ -273,9 +322,12 @@ if [ -n "$winbld" ]; then
     prompt_delete_build_dir "$winbld/$build_mode"
 fi
 
-# Documentation generation
+# GENERATE DOCUMENTATION
 if [ -n "$doc_dir" ]; then
-    progress "Generate documentation."
+    if [ ! -d "$doc_dir" ]; then
+        error "Documentation directory does not exist: $doc_dir"
+    fi
+    info "Generating documentation."
     run "cargo doc -v --target-dir \"$doc_dir\""
 fi
 
