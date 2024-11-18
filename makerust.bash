@@ -165,9 +165,12 @@ run() {
         fi
     fi
 
-    eval "$cmd"
+    if [[ "$verbose" -eq 1 || "$debug" -eq 1 ]]; then
+        eval "$cmd"
+        debug "Running again to capture output: ${cyan}${cmd}${reset}"
+    fi
+
     # Execute the command and capture output
-    debug "Running again to capture output: $cmd"
     output=$(eval "$cmd" 2>&1)
     local exit_code=$?
 
