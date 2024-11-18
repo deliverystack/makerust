@@ -40,7 +40,7 @@ display() {
 # FUNCTION: Display informational messages (e.g., status updates)
 # Arguments: $1 - Message string
 info() {
-    [[ "$verbose" -eq 1 || "$debug" -eq 1 ]] && display ${cyan} "$1"
+    [[ "$verbose" -eq 1 || "$debug" -eq 1 ]] && display ${green} "$1"
 }
 
 # FUNCTION: Display progress messages (e.g., ongoing tasks)
@@ -89,23 +89,6 @@ usage() {
 # FUNCTION: Prompt the user to delete a build directory
 # Arguments: $1 - Path of the build directory to delete
 # If the directory exists, prompt the user (unless force mode is enabled).
-prompt_delete_build_dir() {
-    local build_dir="$1"
-    if [ -d "$build_dir" ]; then
-        if [ "$force" -eq 1 ]; then
-            run "rm -rf \"$build_dir\""
-        else
-            echo -n "${script_name}: Do you want to delete the build directory $build_dir? [Y/n] "
-            read -r delete_dir
-            if [[ -z "$delete_dir" || "$delete_dir" =~ ^[Yy]$ ]]; then
-                run "rm -rf \"$build_dir\""
-            else
-                debug "Skipping deletion of $build_dir"
-            fi
-        fi
-    fi
-}
-
 prompt_delete_directory() {
     local dir="$1"
 
@@ -288,7 +271,7 @@ if [ -n "$linbld" ]; then
     fi
 
     progress "Delete Linux build directory used by cargo: ${cyan}${linbld}/${build_mode}${reset}."
-    prompt_delete_build_dir "$linbld/$build_mode"
+    prompt_delete_directory "$linbld/$build_mode"
 fi
 
 if [ -n "$winbld" ]; then
@@ -319,7 +302,7 @@ if [ -n "$winbld" ]; then
     fi
 
     progress "Delete Windows build directory used by cargo: ${cyan}${winbld}/${build_mode}${reset}."
-    prompt_delete_build_dir "$winbld/$build_mode"
+    prompt_delete_directory "$winbld/$build_mode"
 fi
 
 # GENERATE DOCUMENTATION
