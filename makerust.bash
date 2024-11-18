@@ -33,17 +33,14 @@ cyan=$(tput setaf 6)    # Cyan for informational messages
 orange=$(tput setaf 3)  # Orange for progress updates
 reset=$(tput sgr0)      # Reset to default terminal text style
 
+display() {
+    printf "${1}${script_name}${reset}: %s\n" "$2"
+}
+
 # FUNCTION: Display informational messages (e.g., status updates)
 # Arguments: $1 - Message string
 info() {
-    [[ "$verbose" -eq 1 || "$debug" -eq 1 ]] && printf "${cyan}${script_name}${reset}: %s\n" "$1"
-}
-
-
-# these should check if [[ -n "${FUNCNAME[1]}" or something and write to standard error if so.
-
-display() {
-    printf "${1}${script_name}${reset}: %s\n" "$2"
+    [[ "$verbose" -eq 1 || "$debug" -eq 1 ]] && display ${cyan} "$1"
 }
 
 # FUNCTION: Display progress messages (e.g., ongoing tasks)
