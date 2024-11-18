@@ -30,13 +30,12 @@ green=$(tput setaf 2)
 yellow=$(tput setaf 3)
 red=$(tput setaf 1)
 cyan=$(tput setaf 6)
-blue=$(tput setaf 4)
 orange=$(tput setaf 3)
 reset=$(tput sgr0)
 
 # Informational message
 info() {
-    [[ "$verbose" -eq 1 || "$debug" -eq 1 ]] && printf "${blue}${script_name}${reset}: %s\n" "$1"
+    [[ "$verbose" -eq 1 || "$debug" -eq 1 ]] && printf "${cyan}${script_name}${reset}: %s\n" "$1"
 }
 
 progress() {
@@ -55,7 +54,7 @@ error() {
 
 # Debug message
 debug() {
-    [ "$debug" -eq 1 ] && printf "${green}${script_name}${reset}: %s\n" "$1"
+    [ "$debug" -eq 1 ] && printf "${blue}${script_name}${reset}: %s\n" "$1"
 }
 
 # Display usage information
@@ -81,12 +80,12 @@ prompt_delete_build_dir() {
     local build_dir="$1"
     if [ -d "$build_dir" ]; then
         if [ "$force" -eq 1 ]; then
-            run_command "rm -rf \"$build_dir\""
+            run "rm -rf \"$build_dir\""
         else
             echo -n "Do you want to delete the build directory $build_dir? [Y/n] "
             read -r delete_dir
             if [[ -z "$delete_dir" || "$delete_dir" =~ ^[Yy]$ ]]; then
-                run_command "rm -rf \"$build_dir\""
+                run "rm -rf \"$build_dir\""
             else
                 debug "Skipping deletion of $build_dir"
             fi
@@ -106,12 +105,12 @@ get_binary_name() {
 }
 
 # Function to run commands
-run_command() {
+run() {
     local cmd="$1"
 
     # Print and execute command
     if [ "$force" -eq 1 ]; then
-        info "Force mode enabled: executing without prompt: $cmd"
+        info "Force mode enabled: executing without prompt: ${cyan}${cmd}${reset}"
     else
         echo -e "${prefix} About to execute: ${green}${cmd}${reset}"
         echo -n "Do you want to proceed? [Y/n/a] "
@@ -129,7 +128,7 @@ run_command() {
 
     if [ "$debug" -eq 1 ] || [ "$verbose" -eq 1 ]; then
         eval "$cmd"
-        debug "Running again to capture output: ${blue}${cmd}${reset}"
+        info "Running again to capture output: ${cyan}${cmd}${reset}"
     fi
 
     output=$(eval "$cmd" 2>&1)
@@ -192,37 +191,37 @@ if [[ "$build_mode" != "release" && "$build_mode" != "debug" ]]; then
 fi
 
 export RUST_BACKTRACE=$rust_backtrace
-debug "RUST_BACKTRACE set to $RUST_BACKTRACE"
-debug "Project directory set to: $project_dir"
-debug "Windows build output directory set to: $winbld"
-debug "Linux build output directory set to: $linbld"
-debug "Documentation output directory set to: $doc_dir"
-debug "Build mode set to: $build_mode"
-debug "Verbose mode: $verbose"
-debug "Debug mode: $debug"
-debug "Time mode: $use_time"
-debug "Force mode: $force"
+debug "RUST_BACKTRACE set to ${green}$RUST_BACKTRACE${reset}"
+debug "Project directory set to: ${green}$project_dir${reset}"
+debug "Windows build output directory set to: ${green}$winbld${reset}"
+debug "Linux build output directory set to: ${green}$linbld${reset}"
+debug "Documentation output directory set to: ${green}$doc_dir${reset}"
+debug "Build mode set to: ${green}$build_mode${reset}"
+debug "Verbose mode: ${green}$verbose${reset}"
+debug "Debug mode: ${green}$debug${reset}"
+debug "Time mode: ${green}$use_time${reset}"
+debug "Force mode: ${green}$force${reset}"
 
 binary_name=$(get_binary_name)
 debug "Detected binary name: $binary_name"
 
 # Build and deploy binaries
 progress "Update Rust toolchains, components, and rustup."
-run_command "rustup update"
+run "rustup update"
 progress "Update dependencies in Cargo.lock to the latest versions."
-run_command "cargo update -v"
+run "cargo update -v"
 progress "Remove target directory files to clean build artifacts and dependencies."
-run_command "cargo clean"
+run "cargo clean"
 
 # Linux build
 if [ -n "$linbld" ]; then
     progress "Build Linux binary."
-    run_command "cargo build --target-dir \"$linbld\" --$build_mode"
+    run "cargo build --target-dir \"$linbld\" --$build_mode"
     linux_bin="$linbld/$build_mode/$binary_name"
     if [ -f "$linux_bin" ]; then
-        progress "Install Linux binary: ${green}${linux_bin}${reset}"
+        progress "Install Linux binary: ${cyan}${linux_bin}${reset}"
         if [ "$force" -eq 1 ]; then
-            run_command "cp \"$linux_bin\" \"$linbld/\""
+            run "cp \"$linux_bin\" \"$linbld/\""
         else
             echo -n "Binary already exists. Do you want to overwrite it? [Y/n/a] "
             read -r overwrite
@@ -230,7 +229,7 @@ if [ -n "$linbld" ]; then
                 info "Aborting script as per user request."
                 exit 1
             elif [[ -z "$overwrite" || "$overwrite" =~ ^[Yy]$ ]]; then
-                run_command "cp $linux_bin $linbld"
+                run "cp $linux_bin $linbld"
             else
                 debug "Skipping overwrite of $linux_bin"
             fi
@@ -239,21 +238,21 @@ if [ -n "$linbld" ]; then
         warn "Linux binary not found: $linux_bin"
     fi
 
-    progress "Delete Linux build directory used by cargo: ${green}${linbld}/${build_mode}${reset}."
+    progress "Delete Linux build directory used by cargo: ${cyan}${linbld}/${build_mode}${reset}."
     prompt_delete_build_dir "$linbld/$build_mode"
 fi
 
 if [ -n "$winbld" ]; then
     progress "Build Windows binary."
     winbld=$(wslpath -ma "$winbld")
-    run_command "cargo.exe build --target-dir \"$winbld\" --$build_mode"
+    run "cargo.exe build --target-dir \"$winbld\" --$build_mode"
     windows_bin="$winbld/$build_mode/$binary_name.exe"
     windows_bin=$(wslpath -u "$windows_bin")
     if [ -f "$windows_bin" ]; then
-        progress "Install Windows binary: $windows_bin"
+        progress "Install Windows binary: ${cyan}${windows_bin}${reset}"
         winbld=$(wslpath -u "$winbld")
         if [ "$force" -eq 1 ]; then
-            run_command "cp \"$windows_bin\" \"$winbld/\""
+            run "cp \"$windows_bin\" \"$winbld/\""
         else
             echo -n "Binary already exists. Do you want to overwrite it? [Y/n/a] "
             read -r overwrite
@@ -261,7 +260,7 @@ if [ -n "$winbld" ]; then
                 info "Aborting script as per user request."
                 exit 1
             elif [[ -z "$overwrite" || "$overwrite" =~ ^[Yy]$ ]]; then
-                run_command "cp \"$windows_bin\" \"$winbld/\""
+                run "cp \"$windows_bin\" \"$winbld/\""
             else
                 debug "Skipping overwrite of $windows_bin"
             fi
@@ -270,14 +269,14 @@ if [ -n "$winbld" ]; then
         warn "Windows binary not found: $windows_bin"
     fi
 
-    progress "Delete Windows build directory used by cargo."
+    progress "Delete Windows build directory used by cargo: ${cyan}${winbld}/${build_mode}${reset}."
     prompt_delete_build_dir "$winbld/$build_mode"
 fi
 
 # Documentation generation
 if [ -n "$doc_dir" ]; then
     progress "Generate documentation."
-    run_command "cargo doc -v --target-dir \"$doc_dir\""
+    run "cargo doc -v --target-dir \"$doc_dir\""
 fi
 
 progress "Script completed successfully."
