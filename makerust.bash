@@ -97,13 +97,13 @@ prompt_delete_directory() {
             echo -e "${warn_prefix} Do you want to delete the directory: ${yellow}${dir}${reset}? [y/N]"
             read -r delete_dir
             if [[ "$delete_dir" =~ ^[Yy]$ ]]; then
-                run_command "rm -rf \"$dir\""
+                run "rm -rf \"$dir\""
                 info "Deleted directory: $dir"
             else
                 info "Skipped deletion of directory: $dir"
             fi
         else
-            run_command "rm -rf \"$dir\""
+            run "rm -rf \"$dir\""
             info "Force mode: deleted directory: $dir"
         fi
     else
