@@ -20,11 +20,11 @@ The script describes its command line parameters. You should pass at least one o
 - `-l <path>`: build the Linux binary under this path, and then move it to this path.
 - `-w <path>`: build the Windows binary under this path, and then move it to this path.
 
-Without the -f option, the script will prompt before invoking each command.
+Without the `-f` option, the script will prompt before invoking each command.
 
 Example usage:
 
-```
+``` sh
 time ~/git/makerust/makerust.bash -w $HOME/bin -l $HOME/bin -p . -fvdt
 ```
 
