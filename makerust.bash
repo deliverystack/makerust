@@ -148,17 +148,21 @@ run() {
         fi
     fi
 
-    if [[ "$verbose" -eq 1 || "$debug" -eq 1 ]]; then
-        eval "$cmd"
-        debug "Running again to capture output: ${cyan}${cmd}${reset}"
+    if [ "$use_time" -eq 1 ]; then
+        cmd="time $cmd"
     fi
 
-    # Execute the command and capture output
-    output=$(eval "$cmd" 2>&1)
+    output=""
+    while IFS= read -r line; do
+        output+="$line"$'\n'
+        if [[ "$verbose" -eq 1 || "$debug" -eq 1 ]]; then
+            echo "$line"
+        fi
+    done < <($cmd 2>&1)
     local exit_code=$?
 
     # Check for errors or warnings in the output
-    if [ $exit_code -ne 0 ]; then
+    if [ $exit_code -ne 0 ] || echo "$output" | grep -qEi "(error|warning)" | grep -vqE "(--error|--warning)"; then
         error "Command failed: $cmd (exit code: $exit_code)"
         if [ "$force" -eq 1 ]; then
             info "Force mode enabled: exiting script due to command error."
@@ -171,12 +175,6 @@ run() {
         else
             exit 1
         fi
-    fi
-
-    # Time the command if time mode is enabled
-    if [ "$use_time" -eq 1 ]; then
-        info "Running command with timing: $cmd"
-        eval "time $cmd"
     fi
 }
 
@@ -209,6 +207,9 @@ while getopts ":vdtb:p:w:l:o:m:fh" opt; do
         *) usage ;;
     esac
 done
+
+CARGO_TARGET_DIR=$project_dir
+cd $project_dir
 
 # Validate build mode (must be "release" or "debug")
 if [[ "$build_mode" != "release" && "$build_mode" != "debug" ]]; then
@@ -253,7 +254,7 @@ if [ -n "$linbld" ]; then
     if [ -f "$linux_bin" ]; then
         progress "Install Linux binary: ${cyan}${linux_bin}${reset}"
         if [ "$force" -eq 1 ]; then
-            run "cp \"$linux_bin\" \"$linbld/\""
+            run "cp $linux_bin $linbld"
         else
             echo -n "${script_name}: Binary already exists. Do you want to overwrite it? [Y/n/a] "
             read -r overwrite
@@ -268,6 +269,7 @@ if [ -n "$linbld" ]; then
         fi
     else
         warn "Linux binary not found: $linux_bin"
+        ls $linux_bin
     fi
 
     progress "Delete Linux build directory used by cargo: ${cyan}${linbld}/${build_mode}${reset}."
