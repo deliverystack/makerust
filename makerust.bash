@@ -1,5 +1,7 @@
 #!/usr/bin/bash
 
+source $HOME/bin/lib.bash
+
 # SCRIPT SUMMARY
 # This script automates building, testing, and deploying Rust projects.
 # Features include:
@@ -26,63 +28,25 @@ force=0              # Force mode toggle (0: off, 1: on)
 script_name=$(basename "$0") # The name of this script for message context
 
 # OUTPUT COLOR CONFIGURATION (for user-friendly messaging)
-green=$(tput setaf 2)   # Green for success or informational variable values
-yellow=$(tput setaf 3)  # Yellow for warnings
-red=$(tput setaf 1)     # Red for errors
 cyan=$(tput setaf 6)    # Cyan for informational messages
-orange=$(tput setaf 3)  # Orange for progress updates
-reset=$(tput sgr0)      # Reset to default terminal text style
-
-display() {
-    printf "${1}${script_name}${reset}: %s\n" "$2"
-}
-
-# FUNCTION: Display informational messages (e.g., status updates)
-# Arguments: $1 - Message string
-info() {
-    [[ "$verbose" -eq 1 || "$debug" -eq 1 ]] && display ${green} "$1"
-}
-
-# FUNCTION: Display progress messages (e.g., ongoing tasks)
-# Arguments: $1 - Message string
-progress() {
-    display ${orange} "$1"
-}
-
-# FUNCTION: Display warning messages (e.g., potential issues)
-# Arguments: $1 - Warning message string
-warn() {
-    display ${yellow} "$1"
-}
-
-# FUNCTION: Display error messages (e.g., command failures)
-# Arguments: $1 - Error message string
-error() {
-    display ${red} "$1" >&2
-}
-
-# FUNCTION: Display debug messages (if debug mode is enabled)
-# Arguments: $1 - Debug message string
-debug() {
-    [ "$debug" -eq 1 ] && display ${cyan} "$1"
-}
+reset_color=$(tput sgr0)      # Reset to default terminal text style
 
 # FUNCTION: Display usage information for the script
 # Purpose: Provide a summary of available options and usage examples.
 usage() {
     echo "Usage: ${script_name} [options]"
     echo "Options:"
-    echo "  -v          Enable verbose mode."
-    echo "  -d          Enable debug mode (more detailed output)."
-    echo "  -t          Enable command execution timing."
     echo "  -b <value>  Set RUST_BACKTRACE level (default: full)."
-    echo "  -p <path>   Specify the Rust project directory."
-    echo "  -w <path>   Specify the output directory for Windows builds."
-    echo "  -l <path>   Specify the output directory for Linux builds."
-    echo "  -o <path>   Specify the output directory for documentation."
-    echo "  -m <mode>   Specify build mode ('debug' or 'release')."
+    echo "  -d          Enable debug mode (more detailed output)."
     echo "  -f          Enable force mode (skip all prompts)."
     echo "  -h          Display this help message."
+    echo "  -l <path>   Specify the output directory for Linux builds."
+    echo "  -m <mode>   Specify build mode ('debug' or 'release')."
+    echo "  -o <path>   Specify the output directory for documentation."
+    echo "  -p <path>   Specify the Rust project directory."
+    echo "  -t          Enable command execution timing."
+    echo "  -v          Enable verbose mode."
+    echo "  -w <path>   Specify the output directory for Windows builds."
     exit 0
 }
 
@@ -92,24 +56,31 @@ usage() {
 prompt_delete_directory() {
     local dir="$1"
 
+    # Prevent accidental deletion of the project directory or root directory
+    if [[ "$dir" == "$project_dir" || "$dir" == "/" ]]; then
+        error "Refusing to delete the project directory or root directory: $dir"
+        return 1
+    fi
+
     if [ -d "$dir" ]; then
         if [ "$force" -ne 1 ]; then
-            echo -e "${warn_prefix} Do you want to delete the directory: ${yellow}${dir}${reset}? [y/N]"
+            echo -e "Do you want to delete the directory: ${cyan}${dir}${reset_color}? [y/N]"
             read -r delete_dir
             if [[ "$delete_dir" =~ ^[Yy]$ ]]; then
-                run "rm -rf \"$dir\""
+#                run_command rm -rf "$dir"
                 info "Deleted directory: $dir"
             else
                 info "Skipped deletion of directory: $dir"
             fi
         else
-            run "rm -rf \"$dir\""
+#            run_command rm -rf "$dir"
             info "Force mode: deleted directory: $dir"
         fi
     else
         debug "Directory not found, skipping deletion: $dir"
     fi
 }
+
 
 # FUNCTION: Extract the binary name from the project's Cargo.toml file
 # Arguments: None
@@ -121,60 +92,6 @@ get_binary_name() {
     else
         error "Cargo.toml not found in $project_dir"
         exit 1
-    fi
-}
-
-# FUNCTION: Execute a command with optional prompts and error handling
-# Arguments: $1 - Command string to execute
-# If force mode is enabled, the command runs without confirmation.
-run() {
-    local cmd="$1"
-
-    # Show command execution preview
-    if [ "$force" -eq 1 ]; then
-        info "Force mode enabled: executing without prompt: ${cyan}${cmd}${reset}"
-    else
-        echo -e "${script_name}: About to execute: ${green}${cmd}${reset}"
-        echo -n "Do you want to proceed? [Y/n/a] "
-        read -r proceed
-        if [[ "$proceed" =~ ^[Aa]$ ]]; then
-            info "Aborting script as per user request."
-            exit 1
-        elif [[ -z "$proceed" || "$proceed" =~ ^[Yy]$ ]]; then
-            info "Proceeding with command: $cmd"
-        else
-            info "Skipping command: $cmd"
-            return
-        fi
-    fi
-
-    if [ "$use_time" -eq 1 ]; then
-        cmd="time $cmd"
-    fi
-
-    output=""
-    while IFS= read -r line; do
-        output+="$line"$'\n'
-        if [[ "$verbose" -eq 1 || "$debug" -eq 1 ]]; then
-            echo "$line"
-        fi
-    done < <($cmd 2>&1)
-    local exit_code=$?
-
-    # Check for errors or warnings in the output
-    if [ $exit_code -ne 0 ] || echo "$output" | grep -qEi "(error|warning)" | grep -vqE "(--error|--warning)"; then
-        error "Command failed: $cmd (exit code: $exit_code)"
-        if [ "$force" -eq 1 ]; then
-            info "Force mode enabled: exiting script due to command error."
-            exit 1
-        fi
-        echo -n "${script_name}: Do you want to continue to the next command? [Y/n] "
-        read -r continue_next
-        if [[ -z "$continue_next" || "$continue_next" =~ ^[Yy]$ ]]; then
-            warn "Continuing to the next command despite error."
-        else
-            exit 1
-        fi
     fi
 }
 
@@ -208,8 +125,15 @@ while getopts ":vdtb:p:w:l:o:m:fh" opt; do
     esac
 done
 
-CARGO_TARGET_DIR=$project_dir
-cd $project_dir
+run_flags=()
+[[ "$debug" -eq 1 ]] && run_flags+=("-d")
+[[ "$verbose" -eq 1 ]] && run_flags+=("-v")
+[[ "$use_time" -eq 1 ]] && run_flags+=("-t")
+run_flags+=("-x")
+run_flags+=("--") # must be last
+
+#export CARGO_TARGET_DIR=$project_dir
+cd "$project_dir" || error "invalid project directory: ${cyan}$project_dir${reset_color}"
 
 # Validate build mode (must be "release" or "debug")
 if [[ "$build_mode" != "release" && "$build_mode" != "debug" ]]; then
@@ -223,88 +147,69 @@ fi
 
 # Export RUST_BACKTRACE level for the script's execution
 export RUST_BACKTRACE=$rust_backtrace
-debug "RUST_BACKTRACE set to ${cyan}$RUST_BACKTRACE${reset}"
-debug "Project directory set to: ${cyan}$project_dir${reset}"
-debug "Windows build output directory set to: ${cyan}$winbld${reset}"
-debug "Linux build output directory set to: ${cyan}$linbld${reset}"
-debug "Documentation output directory set to: ${cyan}$doc_dir${reset}"
-debug "Build mode set to: ${cyan}$build_mode${reset}"
-debug "Verbose mode: ${cyan}$verbose${reset}"
-debug "Debug mode: ${cyan}$debug${reset}"
-debug "Time mode: ${cyan}$use_time${reset}"
-debug "Force mode: ${cyan}$force${reset}"
+debug "RUST_BACKTRACE set to ${cyan}$RUST_BACKTRACE${reset_color}"
+debug "Project directory set to: ${cyan}$project_dir${reset_color}"
+debug "Windows build output directory set to: ${cyan}$winbld${reset_color}"
+debug "Linux build output directory set to: ${cyan}$linbld${reset_color}"
+debug "Documentation output directory set to: ${cyan}$doc_dir${reset_color}"
+debug "Build mode set to: ${cyan}$build_mode${reset_color}"
+debug "Verbose mode: ${cyan}$verbose${reset_color}"
+debug "Debug mode: ${cyan}$debug${reset_color}"
+debug "Time mode: ${cyan}$use_time${reset_color}"
+debug "Force mode: ${cyan}$force${reset_color}"
 
 # DETECT THE PROJECT'S BINARY NAME
 binary_name=$(get_binary_name)
-debug "Binary name detected: ${cyan}${binary_name}${reset}" HW
+debug "Binary name detected: ${cyan}${binary_name}${reset_color}"
 
-# Build and deploy binaries
-progress "Update Rust toolchains, components, and rustup."
-run "rustup update"
-progress "Update dependencies in Cargo.lock to the latest versions."
-run "cargo update -v"
 progress "Remove target directory files to clean build artifacts and dependencies."
-run "cargo clean"
+run_command "${run_flags[@]}" cargo clean --target-dir "$project_dir/target" 
 
-# Linux build
 if [ -n "$linbld" ]; then
+    progress "Update Linux Rust toolchains, components, and rustup."
+    run_command "${run_flags[@]}" rustup update
+
+    progress "Update Linux dependencies in Cargo.lock to the latest versions."
+    run_command "${run_flags[@]}" cargo update -v
+
+
     progress "Build Linux binary."
-    run "cargo build --target-dir \"$linbld\" --$build_mode"
-    linux_bin="$linbld/$build_mode/$binary_name"
+    run_command "${run_flags[@]}" cargo build --target-dir "$project_dir/target/linux" "--$build_mode"
+    
+    linux_bin="$project_dir/target/linux/$build_mode/$binary_name"
     if [ -f "$linux_bin" ]; then
-        progress "Install Linux binary: ${cyan}${linux_bin}${reset}"
-        if [ "$force" -eq 1 ]; then
-            run "cp $linux_bin $linbld"
-        else
-            echo -n "${script_name}: Binary already exists. Do you want to overwrite it? [Y/n/a] "
-            read -r overwrite
-            if [[ "$overwrite" =~ ^[Aa]$ ]]; then
-                info "Aborting script as per user request."
-                exit 1
-            elif [[ -z "$overwrite" || "$overwrite" =~ ^[Yy]$ ]]; then
-                run "cp $linux_bin $linbld"
-            else
-                debug "Skipping overwrite of $linux_bin"
-            fi
-        fi
+        progress "Install Linux binary: ${cyan}${linux_bin}${reset_color}"
+        run_command "${run_flags[@]}" cp "$linux_bin" "$linbld"
     else
         warn "Linux binary not found: $linux_bin"
-        ls $linux_bin
     fi
 
-    progress "Delete Linux build directory used by cargo: ${cyan}${linbld}/${build_mode}${reset}."
-    prompt_delete_directory "$linbld/$build_mode"
+    progress "Delete Linux build directory used by cargo."
+    run_command "${run_flags[@]}" cargo clean --target-dir "$project_dir/target/linux"
 fi
 
+# Windows build
 if [ -n "$winbld" ]; then
+    progress "Update Windows Rust toolchains, components, and rustup."
+    run_command "${run_flags[@]}" rustup.exe update
+
+    progress "Update Windows dependencies in Cargo.lock to the latest versions."
+    run_command "${run_flags[@]}" cargo.exe update -v
+
     progress "Build Windows binary."
-    winbld=$(wslpath -ma "$winbld")
-    run "cargo.exe build --target-dir \"$winbld\" --$build_mode"
-    windows_bin="$winbld/$build_mode/$binary_name.exe"
-    windows_bin=$(wslpath -u "$windows_bin")
+    run_command "${run_flags[@]}" cargo.exe build --target-dir "$winbld" "--$build_mode"
+
+    windows_bin=$(wslpath -u "$project_dir/target/windows/$build_mode/$binary_name.exe")
     if [ -f "$windows_bin" ]; then
-        progress "Install Windows binary: ${cyan}${windows_bin}${reset}"
+        progress "Install Windows binary: ${cyan}${windows_bin}${reset_color}"
         winbld=$(wslpath -u "$winbld")
-        if [ "$force" -eq 1 ]; then
-            run "cp \"$windows_bin\" \"$winbld/\""
-        else
-            echo -n "Binary already exists. Do you want to overwrite it? [Y/n/a] "
-            read -r overwrite
-            if [[ "$overwrite" =~ ^[Aa]$ ]]; then
-                info "Aborting script as per user request."
-                exit 1
-            elif [[ -z "$overwrite" || "$overwrite" =~ ^[Yy]$ ]]; then
-                run "cp \"$windows_bin\" \"$winbld/\""
-            else
-                debug "Skipping overwrite of $windows_bin"
-            fi
-        fi
+        run_command "${run_flags[@]}" cp "$windows_bin" "$winbld/"
     else
         warn "Windows binary not found: $windows_bin"
     fi
 
-    progress "Delete Windows build directory used by cargo: ${cyan}${winbld}/${build_mode}${reset}."
-    prompt_delete_directory "$winbld/$build_mode"
+    progress "Delete Windows build directory used by cargo."
+    run_command "${run_flags[@]}" cargo clean --target-dir "$project_dir/target/windows"
 fi
 
 # GENERATE DOCUMENTATION
@@ -313,7 +218,7 @@ if [ -n "$doc_dir" ]; then
         error "Documentation directory does not exist: $doc_dir"
     fi
     info "Generating documentation."
-    run "cargo doc -v --target-dir \"$doc_dir\""
+    run_command "${run_flags[@]}" cargo doc -v --target-dir "$project_dir/target/docs"
 fi
 
 progress "Script completed successfully."
