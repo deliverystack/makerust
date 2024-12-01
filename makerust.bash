@@ -67,13 +67,13 @@ prompt_delete_directory() {
             echo -e "Do you want to delete the directory: ${cyan}${dir}${reset_color}? [y/N]"
             read -r delete_dir
             if [[ "$delete_dir" =~ ^[Yy]$ ]]; then
-#                run_command rm -rf "$dir"
+                run_command rm -rf "$dir"
                 info "Deleted directory: $dir"
             else
                 info "Skipped deletion of directory: $dir"
             fi
         else
-#            run_command rm -rf "$dir"
+            run_command rm -rf "$dir"
             info "Force mode: deleted directory: $dir"
         fi
     else
@@ -171,7 +171,6 @@ if [ -n "$linbld" ]; then
 
     progress "Update Linux dependencies in Cargo.lock to the latest versions."
     run_command "${run_flags[@]}" cargo update -v
-
 
     progress "Build Linux binary."
     run_command "${run_flags[@]}" cargo build --target-dir "$project_dir/target/linux" "--$build_mode"
