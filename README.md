@@ -22,6 +22,8 @@ The script describes its command line parameters. You should pass at least one o
 
 Without the `-f` option, the script will prompt before invoking each command.
 
+lib.sh is https://github.com/deliverystack/wslbin/blob/main/bin/lib.bash
+
 Example usage:
 
 ``` sh
